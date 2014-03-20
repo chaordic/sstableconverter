@@ -5,6 +5,10 @@ sstableconverter
 
 sstableconverter converts sstables between Cassandra partitioner, normally between RandomPartitioner and Murmur3Partitioner. After converting, sstables can be loaded into the cluster via sstableloader distributed in Cassandra package.
 
+# Version
+
+* This version converts sstables from C* 2.0.  Please switch to branch 1.2 for C* 1.2 series.
+
 # Requirements
 
 * Maven
