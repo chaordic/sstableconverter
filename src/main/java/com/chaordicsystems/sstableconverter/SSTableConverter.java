@@ -28,8 +28,8 @@ import java.util.Set;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.Config;
-import org.apache.cassandra.db.Column;
 import org.apache.cassandra.db.ColumnFamilyType;
+import org.apache.cassandra.db.IColumn;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.dht.IPartitioner;
@@ -55,7 +55,7 @@ public class SSTableConverter
 {
     static
     {
-        Config.setClientMode(true);
+        Config.setLoadYaml(false);
     }
 
     public static void main(String[] args) throws Exception
@@ -77,7 +77,8 @@ public class SSTableConverter
             cf = srcDir.getName();
         }
 
-        Collection<SSTableReader> originalSstables = readSSTables(srcPart, srcDir, keyspace, cf, handler);
+        CFMetaData metadata = new CFMetaData(keyspace, cf, ColumnFamilyType.Standard, BytesType.instance, null);
+        Collection<SSTableReader> originalSstables = readSSTables(srcPart, srcDir, metadata, handler);
 
         handler.output(String.format("Converting sstables of ks[%s], cf[%s], from %s to %s. Src dir: %s. Dest dir: %s.",
                                      keyspace, cf, srcPart.getClass().getName(), dstPart.getClass().getName(),
@@ -89,7 +90,7 @@ public class SSTableConverter
         for (SSTableReader reader : originalSstables) {
             handler.output("Reading: " + reader.getFilename());
             SSTableIdentityIterator row;
-            SSTableScanner scanner = reader.getScanner();
+            SSTableScanner scanner = reader.getDirectScanner(null);
 
             // collecting keys to export
             while (scanner.hasNext())
@@ -98,7 +99,7 @@ public class SSTableConverter
 
                 destWriter.newRow(row.getKey().key);
                 while (row.hasNext()) {
-                    Column col = (Column)row.next();
+                    IColumn col = (IColumn)row.next();
                     destWriter.addColumn(col.name(), col.value(), col.timestamp());
                 }
             }
@@ -112,8 +113,8 @@ public class SSTableConverter
     }
 
     public static Collection<SSTableReader> readSSTables(final IPartitioner srcPartitioner, File srcDir,
-                                                         final String keyspace, final String cf,
-                                                         final OutputHandler handler)
+                                                         final CFMetaData metadata,
+                                                         final OutputHandler outputHandler)
     {
         final List<SSTableReader> sstables = new ArrayList<SSTableReader>();
         srcDir.list(new FilenameFilter()
@@ -129,15 +130,13 @@ public class SSTableConverter
 
                 if (!new File(desc.filenameFor(Component.PRIMARY_INDEX)).exists())
                 {
-                    handler.output(String.format("Skipping file %s because index is missing", name));
+                    outputHandler.output(String.format("Skipping file %s because index is missing", name));
                     return false;
                 }
 
                 Set<Component> components = new HashSet<Component>();
                 components.add(Component.DATA);
                 components.add(Component.PRIMARY_INDEX);
-                if (new File(desc.filenameFor(Component.SUMMARY)).exists())
-                    components.add(Component.SUMMARY);
                 if (new File(desc.filenameFor(Component.COMPRESSION_INFO)).exists())
                     components.add(Component.COMPRESSION_INFO);
                 if (new File(desc.filenameFor(Component.STATS)).exists())
@@ -145,24 +144,11 @@ public class SSTableConverter
 
                 try
                 {
-                    CFMetaData metadata = new CFMetaData(keyspace,
-                            cf,
-                            ColumnFamilyType.Standard,
-                            BytesType.instance,
-                            null);
-
-                    // To conserve memory, open SSTableReaders without bloom filters and discard
-                    // the index summary after calculating the file sections to stream and the estimated
-                    // number of keys for each endpoint. See CASSANDRA-5555 for details.
-                    SSTableReader sstable = SSTableReader.openForBatch(desc, components, metadata, srcPartitioner);
-                    sstables.add(sstable);
-
-                    // to conserve heap space when bulk loading
-                    sstable.releaseSummary();
+                    sstables.add(SSTableReader.openForBatch(desc, components, srcPartitioner, metadata));
                 }
                 catch (IOException e)
                 {
-                    handler.output(String.format("Skipping file %s, error opening it: %s", name, e.getMessage()));
+                    outputHandler.output(String.format("Skipping file %s, error opening it: %s", name, e.getMessage()));
                 }
                 return false;
             }

@@ -8,12 +8,47 @@
         <dependency>
             <groupId>org.apache.cassandra</groupId>
             <artifactId>cassandra-all</artifactId>
-            <version>2.0.6</version>
+            <version>1.2.13</version>
         </dependency>    
     </dependencies>
     
 <build>
   <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.2</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <minimizeJar>true</minimizeJar>
+              <filters>
+                <filter>
+                   <artifact>log4j:log4j</artifact>
+                   <includes>
+                       <include>**</include>
+                   </includes>
+                </filter>
+                <filter>
+                   <artifact>commons-logging:commons-logging</artifact>
+                   <includes>
+                       <include>**</include>
+                   </includes>
+                </filter>
+              </filters>
+              <artifactSet>
+                <excludes>
+                  <exclude>cassandra-all:org/apache/cassandra/io/sstable/SSTableReader</exclude>
+                </excludes>
+              </artifactSet>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     <plugin>
       <artifactId>maven-assembly-plugin</artifactId>
       <configuration>
