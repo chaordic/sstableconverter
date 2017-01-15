@@ -1,3 +1,3 @@
 #!/bin/bash
 
-mvn clean compile assembly:single && echo "Success! Executable jar is on target directory."
+mvn clean compile -U assembly:single && echo "Success! Executable jar is on target directory."
