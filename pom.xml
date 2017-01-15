@@ -26,6 +26,7 @@
             </goals>
             <configuration>
               <minimizeJar>true</minimizeJar>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
                    <artifact>log4j:log4j</artifact>
